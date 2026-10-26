@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+
+# Browser persistent profile & cache
+data/browser_profile/
+!data/browser_profile/login_completed.flag
+
+# Temp and scratch directories
+scratch/
+.tempmediaStorage/
+*.tmp
+
+# IDE & OS
+.vscode/
+.idea/
+Thumbs.db
+Desktop.ini
+
+# Data (Folder tetap ter-push ke GitHub sebagai folder kosong)
+data/*
+!data/.gitkeep
+Dataset ABSA Penginapan Bali.xlsx
