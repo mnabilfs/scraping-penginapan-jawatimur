@@ -13,6 +13,9 @@ import sys
 import re
 from datetime import datetime, timedelta
 from pathlib import Path
+import warnings
+warnings.filterwarnings('ignore', category=FutureWarning)
+warnings.filterwarnings('ignore', message='.*select_dtypes.*')
 import pandas as pd
 from langdetect import detect
 
@@ -348,9 +351,20 @@ def proses_pipeline():
     bukti_map = df_full.drop_duplicates("data_id").set_index("data_id")["bukti_halal"].to_dict()
     halal_nama_map = df_full.drop_duplicates("data_id").set_index("data_id")["label_halal_nama"].to_dict()
 
+    # Ekstrak fasilitas dari ulasan (df_full) ke df_hotel
+    df_full_fac = df_full[df_full["fasilitas"].fillna("").astype(str).str.strip() != ""]
+    if not df_full_fac.empty:
+        fac_map = df_full_fac.drop_duplicates("data_id").set_index("data_id")["fasilitas"].to_dict()
+    else:
+        fac_map = {}
+
     df_hotel["status_halal"] = df_hotel["data_id"].map(status_map).fillna("tanpa_indikasi_non_halal")
     df_hotel["bukti_halal"] = df_hotel["data_id"].map(bukti_map).fillna("")
     df_hotel["label_halal_nama"] = df_hotel["data_id"].map(halal_nama_map).fillna(False)
+    df_hotel["fasilitas"] = df_hotel["data_id"].map(fac_map).fillna(df_hotel.get("fasilitas", "")).fillna("")
+
+    # Seragamkan juga fasilitas di df_full agar semua ulasan untuk hotel yang sama memiliki fasilitas
+    df_full["fasilitas"] = df_full["data_id"].map(fac_map).fillna(df_full["fasilitas"]).fillna("")
 
     for c in kolom_hotel_lengkap:
         if c not in df_hotel.columns:
@@ -387,7 +401,7 @@ def proses_pipeline():
         }
         for tf in TOP_FACILITIES:
             col_name = tf.lower().replace(" ", "_").replace("-", "_")
-            item[col_name] = "Ya" if tf in f_list else "Tidak"
+            item[col_name] = "Ya" if any(tf.lower() in x.lower() for x in f_list) else "Tidak"
         rows_olah.append(item)
 
     df_olah_fasilitas = pd.DataFrame(rows_olah)
@@ -419,7 +433,13 @@ def proses_pipeline():
             "rata_rata_rating": round(avg_r, 2) if pd.notnull(avg_r) else 0.0
         })
 
-    df_stat_fasilitas = pd.DataFrame(stat_rows).sort_values(by="jumlah_penginapan", ascending=False).reset_index(drop=True)
+    if stat_rows:
+        df_stat_fasilitas = pd.DataFrame(stat_rows).sort_values(by="jumlah_penginapan", ascending=False).reset_index(drop=True)
+    else:
+        df_stat_fasilitas = pd.DataFrame(columns=[
+            "fasilitas", "jumlah_penginapan", "persentase_penginapan",
+            "penginapan_halal", "penginapan_umum", "rata_rata_rating"
+        ])
 
     # Sheet 5: kalimat_aspek (df_kalimat)
 
@@ -470,7 +490,7 @@ def proses_pipeline():
     def sanitize_for_excel(df_in: pd.DataFrame) -> pd.DataFrame:
         """Mencegah karakter '=' atau '@' di awal teks ulasan memicu error formula di Excel."""
         df_out = df_in.copy()
-        for col in df_out.select_dtypes(include=["object"]).columns:
+        for col in df_out.select_dtypes(include=["object", "str"]).columns:
             df_out[col] = df_out[col].apply(
                 lambda x: re.sub(r"^[=@]+\s*", "", str(x)) if isinstance(x, str) and len(x) > 0 and x[0] in ["=", "@"] else x
             )
